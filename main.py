@@ -56,6 +56,9 @@ async def get_exif_from_url(image_url: ImageUrl):
 
             # Descargar la imagen desde la URL final
             response = await client.get(final_url)
+
+            print(f'status_code: {response.status_code}')
+
             if response.status_code != 200:
                 raise HTTPException(status_code=400, detail="Error descargando la imagen desde la URL final.")
 
