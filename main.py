@@ -6,6 +6,7 @@ import io
 import os
 import sys
 import httpx
+import random
 from pydantic import BaseModel
 import traceback 
 from pprint import pprint 
@@ -40,25 +41,40 @@ def cast(value):
 @app.post("/getExifFromUrl/")
 async def get_exif_from_url(image_url: ImageUrl):
     try:
-        async with httpx.AsyncClient(follow_redirects=False) as client:
+        # Definir un array de posibles User-Agents
+        user_agents = [
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36",
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0.3 Safari/605.1.15",
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:78.0) Gecko/20100101 Firefox/78.0",
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/88.0.4324.150 Safari/537.36",
+            "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:88.0) Gecko/20100101 Firefox/88.0",
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/85.0.4183.121 Safari/537.36",
+            "Mozilla/5.0 (Windows NT 6.1; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/84.0.4147.105 Safari/537.36",
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_9_3) AppleWebKit/537.75.14 (KHTML, like Gecko) Version/7.0.3 Safari/7046A194A",
+            "Mozilla/5.0 (Windows NT 10.0; WOW64; Trident/7.0; rv:11.0) like Gecko",
+            "Mozilla/5.0 (Windows NT 6.1; WOW64; Trident/7.0; AS; rv:11.0) like Gecko"
+        ]
+
+        # Seleccionar un User-Agent aleatoriamente
+        headers = {'User-Agent': random.choice(user_agents)}
+
+        async with httpx.AsyncClient(headers=headers, follow_redirects=False) as client:
 
             print(f"INPUT URL: {image_url.url}")
 
             response = await client.get(image_url.url)
-
             print(f'status_code_1: {response.status_code}')
 
             urls_visited = [str(response.url)]  # Convertir la URL a str para evitar problemas de serialización
             while response.is_redirect:
-                response = await client.get(response.headers["Location"])
+                response = await client.get(response.headers["Location"], headers=headers)
                 urls_visited.append(str(response.url))  # Convertir cada URL redirigida a str
 
             final_url = urls_visited[-1]
             print(f"FINAL URL: {final_url}")
 
             # Descargar la imagen desde la URL final
-            response = await client.get(final_url)
-
+            response = await client.get(final_url, headers=headers)
             print(f'status_code_2 {response.status_code}')
 
             if response.status_code != 200:
@@ -72,6 +88,7 @@ async def get_exif_from_url(image_url: ImageUrl):
             pprint(exif)
 
             return JSONResponse(content={"url": final_url, "EXIF": exif})
+        
     except Exception as e:
         traceback.print_exc()
         
