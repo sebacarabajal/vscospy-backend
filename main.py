@@ -46,18 +46,20 @@ async def get_exif_from_url(image_url: ImageUrl):
 
             response = await client.get(image_url.url)
 
+            print(f'status_code_1: {response.status_code}')
+
             urls_visited = [str(response.url)]  # Convertir la URL a str para evitar problemas de serialización
             while response.is_redirect:
                 response = await client.get(response.headers["Location"])
                 urls_visited.append(str(response.url))  # Convertir cada URL redirigida a str
 
             final_url = urls_visited[-1]
-            print(f"URL: {final_url}")
+            print(f"FINAL URL: {final_url}")
 
             # Descargar la imagen desde la URL final
             response = await client.get(final_url)
 
-            print(f'status_code: {response.status_code}')
+            print(f'status_code_2 {response.status_code}')
 
             if response.status_code != 200:
                 raise HTTPException(status_code=400, detail="Error descargando la imagen desde la URL final.")
