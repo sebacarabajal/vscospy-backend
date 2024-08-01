@@ -8,7 +8,8 @@ import sys
 import httpx
 import random
 from pydantic import BaseModel
-import traceback 
+import traceback
+from urllib.parse import urlparse, urlunparse 
 from pprint import pprint 
 
 app = FastAPI()
@@ -37,6 +38,11 @@ def cast(value):
         return {kk: cast(vv) for kk, vv in value.items()}
     else:
         return value
+    
+def remove_query_params(url):
+    parsed_url = urlparse(url)
+    url_without_query = urlunparse(parsed_url._replace(query=''))
+    return url_without_query
 
 @app.post("/getExifFromUrl/")
 async def get_exif_from_url(image_url: ImageUrl):
@@ -60,9 +66,11 @@ async def get_exif_from_url(image_url: ImageUrl):
 
         async with httpx.AsyncClient(headers=headers, follow_redirects=False) as client:
 
-            print(f"INPUT URL: {image_url.url}")
+            input_url = remove_query_params(image_url.url)
 
-            response = await client.get(image_url.url)
+            print(f"INPUT URL: {input_url}")
+
+            response = await client.get(input_url)
             print(f'status_code_1: {response.status_code}')
 
             urls_visited = [str(response.url)]  # Convertir la URL a str para evitar problemas de serialización
