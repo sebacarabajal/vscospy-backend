@@ -11,6 +11,7 @@ from pydantic import BaseModel
 import traceback
 from urllib.parse import urlparse, urlunparse 
 from pprint import pprint 
+import re
 
 app = FastAPI()
 
@@ -67,26 +68,57 @@ async def get_exif_from_url(image_url: ImageUrl):
         async with httpx.AsyncClient(headers=headers, follow_redirects=False) as client:
 
             input_url = remove_query_params(image_url.url)
-
             print(f"INPUT URL: {input_url}")
 
-            response = await client.get(input_url)
-            print(f'status_code_1: {response.status_code}')
+            # ===== TRANSFORMACIÓN FLEXIBLE PARA VSCO =====
+            # Detectar URLs de VSCO con cualquier región AWS
+            # Patrón: https://im.vsco.co/aws-[región]/[path]
+            vsco_pattern = r'https://im\.vsco\.co/aws-[^/]+/(.+)'
+            vsco_match = re.match(vsco_pattern, input_url)
+            
+            if vsco_match:
+                # Extraer el path después de la región AWS
+                path_after_region = vsco_match.group(1)
+                final_url = f"https://img.vsco.co/{path_after_region}"
+                print(f"VSCO URL detectada (transformación flexible)")
+                print(f"  Región AWS extraída: {input_url.split('/')[3]}")
+                print(f"  URL transformada: {final_url}")
+                
+                # Intentar con la URL transformada
+                response = await client.get(final_url, headers=headers)
+                print(f'Status code VSCO: {response.status_code}')
+                
+                # Si falla con 403/404, podríamos intentar la original como fallback
+                if response.status_code in [403, 404]:
+                    print(f"Transformación falló con {response.status_code}, intentando URL original...")
+                    response = await client.get(input_url, headers=headers)
+                    print(f'Status code original: {response.status_code}')
+                    final_url = input_url  # Si funciona la original, usar esa
+                
+            else:
+                # ===== LÓGICA ORIGINAL PARA OTRAS URLs =====
+                response = await client.get(input_url)
+                print(f'status_code_1: {response.status_code}')
 
-            urls_visited = [str(response.url)]  # Convertir la URL a str para evitar problemas de serialización
-            while response.is_redirect:
-                response = await client.get(response.headers["Location"], headers=headers)
-                urls_visited.append(str(response.url))  # Convertir cada URL redirigida a str
+                urls_visited = [str(response.url)]
+                while response.is_redirect:
+                    response = await client.get(response.headers["Location"], headers=headers)
+                    urls_visited.append(str(response.url))
 
-            final_url = urls_visited[-1]
-            print(f"FINAL URL: {final_url}")
+                final_url = urls_visited[-1]
+                print(f"FINAL URL: {final_url}")
 
-            # Descargar la imagen desde la URL final
-            response = await client.get(final_url, headers=headers)
-            print(f'status_code_2 {response.status_code}')
+                # Descargar la imagen desde la URL final
+                response = await client.get(final_url, headers=headers)
+                print(f'status_code_2: {response.status_code}')
 
+            # ===== PROCESAMIENTO COMÚN =====
             if response.status_code != 200:
-                raise HTTPException(status_code=400, detail="Error descargando la imagen desde la URL final.")
+                if 'vsco.co' in input_url and response.status_code == 403:
+                    error_msg = "VSCO está bloqueando la descarga (Cloudflare protection). Intenta más tarde."
+                else:
+                    error_msg = f"Error descargando la imagen. Status: {response.status_code}"
+                raise HTTPException(status_code=400, detail=error_msg)
 
             # Procesar la imagen para obtener los metadatos EXIF
             image = Image.open(io.BytesIO(response.content))
