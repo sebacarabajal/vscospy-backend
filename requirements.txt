@@ -3,3 +3,4 @@ httpx==0.26.0
 Pillow==10.2.0
 pydantic==2.6.1
 uvicorn
+playwright==1.41.2
